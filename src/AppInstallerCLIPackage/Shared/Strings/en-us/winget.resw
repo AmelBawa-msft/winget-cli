@@ -119,12 +119,19 @@
   </resheader>
   <data name="AdjoinedNotFlagError" xml:space="preserve">
     <value>Adjoined alias is not a flag</value>
+    <comment>Adjoined alias character is not a flag argument
+Example: winget upgrade -hm
+In this case 'h' is an alias to 'silent' flag argument and 'm' is an alias to 'manifest' a non-flag (standard) argument</comment>
   </data>
   <data name="AdjoinedNotFoundError" xml:space="preserve">
     <value>Adjoined flag alias not found</value>
+    <comment>Adjoined flag alias character not found
+Example: winget upgrade -hz
+In this case 'h' is an alias to 'silent' flag argument but 'z' alias is not defined</comment>
   </data>
   <data name="AvailableArguments" xml:space="preserve">
     <value>The following arguments are available:</value>
+    <comment>The following command arguments are available</comment>
   </data>
   <data name="AvailableCommandAliases" xml:space="preserve">
     <value>The following command aliases are available:</value>
@@ -142,7 +149,9 @@
   </data>
   <data name="AvailableSubcommands" xml:space="preserve">
     <value>The following sub-commands are available:</value>
-    <comment>Nested commands that can be run in context of the selected command</comment>
+    <comment>Nested commands that can be run in context of the selected command
+Example: winget source list
+In this case, 'list' is a sub-command</comment>
   </data>
   <data name="AvailableUpgrades" xml:space="preserve">
     <value>upgrades available.</value>
@@ -156,6 +165,7 @@
   </data>
   <data name="CommandArgumentDescription" xml:space="preserve">
     <value>Filter results by command</value>
+    <comment>Filter the search results by command</comment>
   </data>
   <data name="CommandLineArgumentDescription" xml:space="preserve">
     <value>The full command line for completion</value>
@@ -933,6 +943,7 @@ Configuration is disabled due to Group Policy.</value>
   </data>
   <data name="Cancelled" xml:space="preserve">
     <value>Cancelled</value>
+    <comment>As in "an operation was cancelled"</comment>
   </data>
   <data name="ExternalDependencies" xml:space="preserve">
     <value>External</value>
@@ -947,6 +958,7 @@ Configuration is disabled due to Group Policy.</value>
   </data>
   <data name="DependenciesFlowInstall" xml:space="preserve">
     <value>Installing dependencies:</value>
+    <comment>Installating package dependencies</comment>
   </data>
   <data name="DependenciesFlowSourceNotFound" xml:space="preserve">
     <value>Dependency source not found</value>
@@ -961,6 +973,7 @@ Configuration is disabled due to Group Policy.</value>
   </data>
   <data name="DependenciesFlowNoInstallerFound" xml:space="preserve">
     <value>No installers found</value>
+    <comment>No installers found for a dependent package</comment>
   </data>
   <data name="DependenciesFlowNoMinVersion" xml:space="preserve">
     <value>Minimum required version not available for package</value>
