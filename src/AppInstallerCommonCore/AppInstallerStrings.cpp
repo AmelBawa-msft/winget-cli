@@ -5,6 +5,7 @@
 #include "Public/AppInstallerErrors.h"
 #include "Public/AppInstallerLogging.h"
 #include "Public/AppInstallerSHA256.h"
+#include <bitset>
 
 namespace AppInstaller::Utility
 {
@@ -712,5 +713,102 @@ namespace AppInstaller::Utility
         }
 
         return result;
+    }
+
+    // Format string with up to 16 placeholders
+    // Note: After upgrading to C++20, this method should be deprecated in favor of std::format
+    std::string Format(std::string_view message, std::initializer_list<std::string_view> params)
+    {
+        const int maxPlaceholders = 16;
+        std::vector<std::string_view> paramList(params);
+        std::bitset<maxPlaceholders> paramsUsed;
+        
+        char escape = '\\';
+        char leftCurly = '{';
+        char rightCurly = '}';
+        int leftPtr = 0;
+        int rightPtr = 0;
+        int messageSize = message.length();
+        int paramListSize = params.size();
+
+        if (paramListSize > maxPlaceholders)
+        {
+            std::stringstream ssError;
+            ssError << "The number of provided placeholder values exceeds the maximum supported size of " << maxPlaceholders;
+            throw std::out_of_range(ssError.str());
+        }
+
+        std::stringstream ssResult;
+        while (rightPtr < messageSize)
+        {
+            // Consume string until reaching a placeholder
+            bool isEscape = false;
+            while (rightPtr < messageSize && (message[rightPtr] != leftCurly || isEscape))
+            {
+                isEscape = message[rightPtr++] == escape ? !isEscape : false;
+            }
+            
+            // Update string result
+            ssResult << message.substr(leftPtr, rightPtr - leftPtr);
+
+            // If found '{'
+            if (rightPtr < messageSize)
+            {
+                // Consume the placeholder index
+                int indexPtr = rightPtr + 1;
+                int index = 0;
+                while (indexPtr < messageSize && message[indexPtr] >= '0' && message[indexPtr] <= '9')
+                {
+                    index = (index * 10) + message[indexPtr++] - '0';
+                }
+
+                // Ensure that placeholder format is '{index}'
+                if (indexPtr > rightPtr + 1 && indexPtr < messageSize && message[indexPtr] == rightCurly)
+                {
+                    if (index < 0 || index >= maxPlaceholders)
+                    {
+                        std::stringstream ssError;
+                        ssError << "Message string constains a placeholder index out of bound " << index << " (0, " << maxPlaceholders << ")";
+                        throw std::out_of_range(ssError.str());
+                    }
+
+                    if (index >= paramList.size())
+                    {
+                        std::stringstream ssError;
+                        ssError << "Placeholder value for index " << index << " was not provided";
+                        throw std::out_of_range(ssError.str());
+                    }
+                    ssResult << paramList[index];
+                    rightPtr = indexPtr + 1;
+                    paramsUsed.set(index);
+                }
+                else
+                {
+                    // Not a placeholder
+                    ssResult << leftCurly;
+                    ++rightPtr;
+                }
+
+                // Consume remaining substring
+                leftPtr = rightPtr;
+            }
+        }
+
+        // Check if any placeholder value was not used
+        if (paramsUsed.count() != paramListSize)
+        {
+            std::stringstream ssError;
+            ssError << "Not all provided placeholder values were utilized:";
+            for (int i = 0; i < paramListSize; ++i)
+            {
+                if (!paramsUsed.test(i))
+                {
+                    ssError << " {" << i << "}";
+                }
+            }
+            throw std::runtime_error(ssError.str());
+        }
+
+        return ssResult.str();
     }
 }
