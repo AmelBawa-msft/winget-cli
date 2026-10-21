@@ -972,7 +972,7 @@ namespace AppInstaller::MSStore
                 const auto& proxyUri = AppInstaller::Settings::Network().GetProxyUri();
                 if (proxyUri)
                 {
-                    AICLI_LOG(Core, Info, << "Passing proxy to SFS client " << *proxyUri);
+                    AICLI_LOG(Core, Info, << "Passing proxy to SFS client " << Utility::RedactProxyUri(*proxyUri));
                     sfsClientRequest.proxy = *proxyUri;
                 }
 

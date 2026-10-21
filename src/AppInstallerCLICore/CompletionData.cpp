@@ -5,6 +5,7 @@
 #include "Resources.h"
 #include <AppInstallerLogging.h>
 #include <AppInstallerErrors.h>
+#include <AppInstallerStrings.h>
 
 namespace AppInstaller::CLI
 {
@@ -25,7 +26,7 @@ namespace AppInstaller::CLI
     {
         m_word = word;
 
-        AICLI_LOG(CLI, Info, << "Completing word '" << m_word << '\'');
+        AICLI_LOG(CLI, Info, << "Completing word '" << Utility::RedactProxyUri(m_word) << '\'');
 
         // Determine position as an integer
         size_t cursor = wil::safe_cast<size_t>(std::stoull(std::string{ position }));
@@ -176,11 +177,28 @@ namespace AppInstaller::CLI
         m_argsBeforeWord = std::make_unique<CLI::Invocation>(std::move(argsBeforeWord));
         m_argsAfterWord = std::make_unique<CLI::Invocation>(std::move(argsAfterWord));
 
+        std::vector<std::string> logArguments;
+        for (const auto& arg : *m_argsBeforeWord)
+        {
+            logArguments.emplace_back(arg);
+        }
+        size_t beforeWordCount = logArguments.size();
+        if (!m_word.empty())
+        {
+            logArguments.emplace_back(m_word);
+        }
+        size_t afterWordStart = logArguments.size();
+        for (const auto& arg : *m_argsAfterWord)
+        {
+            logArguments.emplace_back(arg);
+        }
+        logArguments = Utility::RedactProxyArguments(std::move(logArguments));
+
         AICLI_LOG(CLI, Info, << "Completion invoked for arguments:" << [&]() {
             std::stringstream strstr;
-            for (const auto& arg : *m_argsBeforeWord)
+            for (size_t i = 0; i < beforeWordCount; ++i)
             {
-                strstr << " '" << arg << '\'';
+                strstr << " '" << logArguments[i] << '\'';
             }
             if (m_word.empty())
             {
@@ -188,11 +206,11 @@ namespace AppInstaller::CLI
             }
             else
             {
-                strstr << " << [replace] '" << m_word << "' >> ";
+                strstr << " << [replace] '" << logArguments[beforeWordCount] << "' >> ";
             }
-            for (const auto& arg : *m_argsAfterWord)
+            for (size_t i = afterWordStart; i < logArguments.size(); ++i)
             {
-                strstr << " '" << arg << '\'';
+                strstr << " '" << logArguments[i] << '\'';
             }
             return strstr.str();
             }());

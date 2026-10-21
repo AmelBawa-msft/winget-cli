@@ -171,7 +171,7 @@ namespace AppInstaller::CLI
 
         AICLI_LOG(CLI, Info, << "WinGet invoked with arguments:" << [&]() {
                 std::stringstream strstr;
-                for (const auto& arg : utf8Args)
+                for (const auto& arg : Utility::RedactProxyArguments(utf8Args))
                 {
                     strstr << " '" << arg << '\'';
                 }

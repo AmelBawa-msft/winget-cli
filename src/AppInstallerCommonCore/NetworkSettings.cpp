@@ -14,7 +14,7 @@ namespace AppInstaller::Settings
         if (proxyUri)
         {
             m_proxyUri = proxyUri.value();
-            AICLI_LOG(Core, Info, << "New value for proxy is " << m_proxyUri.value());
+            AICLI_LOG(Core, Info, << "New value for proxy is " << Utility::RedactProxyUri(m_proxyUri.value()));
         }
         else
         {
@@ -52,7 +52,7 @@ namespace AppInstaller::Settings
             m_proxyUri = GetAdminSetting(StringAdminSetting::DefaultProxy);
         }
         CATCH_LOG()
-        AICLI_LOG(Core, Info, << "Default proxy is " << (m_proxyUri ? m_proxyUri.value() : "not set"));
+        AICLI_LOG(Core, Info, << "Default proxy is " << (m_proxyUri ? Utility::RedactProxyUri(m_proxyUri.value()) : "not set"));
     }
 
     NetworkSettings& NetworkSettings::Instance()

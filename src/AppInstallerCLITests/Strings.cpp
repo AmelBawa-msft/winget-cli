@@ -411,6 +411,57 @@ TEST_CASE("ConvertControlCodesToPictures", "[strings]")
     REQUIRE(ConvertControlCodesToPictures(allCodes) == ConvertToUTF8(allPictures));
 }
 
+TEST_CASE("RedactProxyUri", "[strings]")
+{
+    REQUIRE(RedactProxyUri("") == "");
+    REQUIRE(RedactProxyUri("http://proxy:8080") == "http://proxy:8080");
+    REQUIRE(RedactProxyUri("http://user@proxy:8080") == "http://***@proxy:8080");
+    REQUIRE(RedactProxyUri("http://u:p" + std::string{ '=' } + "a'ss@proxy:8080") == "http://***@proxy:8080");
+    REQUIRE(RedactProxyUri("u:p" + std::string{ ':' } + "//x@proxy") == "***@proxy");
+    REQUIRE(RedactProxyUri("bad scheme://u:p@proxy") == "***@proxy");
+}
+
+TEST_CASE("RedactProxyArguments", "[strings]")
+{
+    using Args = std::vector<std::string>;
+    REQUIRE(RedactProxyArguments(Args{}) == Args{});
+    REQUIRE(RedactProxyArguments(Args{ "install", "--proxy", "http://u:p" + std::string{ '=' } + "ss@proxy", "--id", "a@b" }) == Args{ "install", "--proxy", "http://***@proxy", "--id", "a@b" });
+    REQUIRE(RedactProxyArguments(Args{ "--PROXY=u:p" + std::string{ '\'' } + "ss@proxy" }) == Args{ "--PROXY=***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "---proxy", "u:p ss@proxy" }) == Args{ "---proxy", "***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "-proxy", "u:p@proxy" }) == Args{ "-proxy", "u:p@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "--source", "https://example.test:8080?alice@example.net" }) == Args{ "--source", "https://example.test:8080?alice@example.net" });
+    REQUIRE(RedactProxyArguments(Args{ "--override", "--", "--proxy", "u:p@proxy" }) == Args{ "--override", "--", "--proxy", "***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "DefaultProxy", "http://u:p@proxy" }) == Args{ "settings", "set", "DefaultProxy", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "winget.exe", "config", "set", "--verbose-logs", "DefaultProxy", "http://u:p@proxy" }) == Args{ "winget.exe", "config", "set", "--verbose-logs", "DefaultProxy", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "DefaultProxy", "--output-locale", "en-US", "http://u:p@proxy" }) == Args{ "settings", "set", "DefaultProxy", "--output-locale", "en-US", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--", "DefaultProxy", "http://u:p@proxy" }) == Args{ "settings", "set", "--", "DefaultProxy", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "config", "set", "DefaultProxy", "--proxy", "http://other:p@proxy", "http://u:p@proxy" }) == Args{ "config", "set", "DefaultProxy", "--proxy", "http://***@proxy", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--setting=DefaultProxy", "--value=http://u:p@proxy" }) == Args{ "settings", "set", "--setting=DefaultProxy", "--value=http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "config", "set", "--value", "http://u:p@proxy", "--setting", "DefaultProxy" }) == Args{ "config", "set", "--value", "http://***@proxy", "--setting", "DefaultProxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "DefaultProxy", "--value=http://u:p@proxy" }) == Args{ "settings", "set", "DefaultProxy", "--value=http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--setting=DefaultProxy", "http://u:p@proxy" }) == Args{ "settings", "set", "--setting=DefaultProxy", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--setting", "DefaultProxy", "http://u:p@proxy" }) == Args{ "settings", "set", "--setting", "DefaultProxy", "http://***@proxy" });
+}
+
+TEST_CASE("RedactProxyArguments_QuotedSettingsAndCompletion", "[strings]")
+{
+    using Args = std::vector<std::string>;
+    const std::string proxyValue = std::string{ "http://u:p" } + '@' + "proxy";
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--setting=\"DefaultProxy\"", "--value=" + proxyValue }) == Args{ "settings", "set", "--setting=\"DefaultProxy\"", "--value=http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--setting", "\"DefaultProxy\"", proxyValue }) == Args{ "settings", "set", "--setting", "\"DefaultProxy\"", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "complete", "--commandline", "winget install --proxy http://user:password@proxy.test" }) == Args{ "complete", "--commandline", "winget install --proxy http://***@proxy.test" });
+    REQUIRE(RedactProxyArguments(Args{ "--commandline=winget settings set DefaultProxy http://user:password@proxy.test" }) == Args{ "--commandline=winget settings set DefaultProxy http://***@proxy.test" });
+}
+
+TEST_CASE("RedactProxyArguments_CompletionWord", "[strings]")
+{
+    REQUIRE(RedactProxyArguments(std::vector<std::string>{ "complete", "--word", "http://user:password@proxy.test" }) == std::vector<std::string>{ "complete", "--word", "http://***@proxy.test" });
+    REQUIRE(RedactProxyArguments(std::vector<std::string>{ "--commandline=\"winget install --proxy http://user:password@proxy.test\"" }) == std::vector<std::string>{ "--commandline=\"winget install --proxy http://***@proxy.test\"" });
+    REQUIRE(RedactProxyArguments(std::vector<std::string>{ "complete", "--commandline", "\"C:\\Program Files\\WinGet\\winget.exe\" install --proxy \"http://demo:secret@proxy.test\"" }) == std::vector<std::string>{ "complete", "--commandline", "C:\\Program Files\\WinGet\\winget.exe install --proxy http://***@proxy.test" });
+    auto quotedCommandLine = RedactProxyArguments(std::vector<std::string>{ "--commandline=\"\\\"C:\\Program Files\\WinGet\\winget.exe\\\" install --proxy \\\"http://demo:secret@proxy.test\\\"\"" });
+    REQUIRE(quotedCommandLine[0].find("secret") == std::string::npos);
+}
+
 TEST_CASE("IsValidWindowsFeaturePattern_AllFound_True", "[strings][111981]")
 {
     for (const auto& name : {

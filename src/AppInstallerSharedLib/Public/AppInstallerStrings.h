@@ -330,6 +330,12 @@ namespace AppInstaller::Utility
     // Exempts tab, line feed, and carriage return from being replaced.
     std::string ConvertControlCodesToPictures(std::string_view input);
 
+    // Replaces the user info of a proxy URI, such as user:pass@, with ***@ for logging.
+    std::string RedactProxyUri(std::string_view uri);
+
+    // Hides proxy credentials in proxy, completion, and DefaultProxy setting arguments.
+    std::vector<std::string> RedactProxyArguments(std::vector<std::string> args);
+
     // Generates a random alpha numeric string.
     std::string GetRandomString(size_t size = 8);
 
