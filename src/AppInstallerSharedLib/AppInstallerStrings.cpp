@@ -1195,6 +1195,13 @@ namespace AppInstaller::Utility
     static std::string RedactProxyCommandLine(std::string_view commandLine, bool stripEnclosingQuotes)
     {
         bool wasQuoted = stripEnclosingQuotes && commandLine.size() >= 2 && commandLine.front() == '"' && commandLine.back() == '"';
+        bool hasProxySyntax = CaseInsensitiveContainsSubstring(commandLine, "--proxy") ||
+            CaseInsensitiveContainsSubstring(commandLine, "DefaultProxy");
+        if (hasProxySyntax && (commandLine.find('\'') != std::string_view::npos || commandLine.find('@') == std::string_view::npos))
+        {
+            return wasQuoted ? "\"[redacted]\"" : "[redacted]";
+        }
+
         std::string_view originalCommandLine = commandLine;
         if (wasQuoted)
         {
@@ -1250,27 +1257,17 @@ namespace AppInstaller::Utility
 
     static std::vector<std::string> RedactProxyArgumentsInternal(std::vector<std::string> args, bool redactCommandLine)
     {
-        constexpr std::string_view s_proxyArgumentName = "proxy";
-        bool isProxyValue = false;
-        bool isCommandLineValue = false;
-
-        for (auto& arg : args)
+        auto redactProxyValue = [](std::string_view value)
         {
-            if (isCommandLineValue)
-            {
-                arg = RedactProxyCommandLine(arg, false);
-                isCommandLineValue = false;
-                continue;
-            }
+            return value.find('@') == std::string_view::npos ?
+                std::string{ "[redacted]" } : RedactProxyUri(value);
+        };
 
-            if (isProxyValue)
-            {
-                arg = RedactProxyUri(arg);
-                isProxyValue = false;
-                continue;
-            }
-
-            // Matches the CLI parser: two or more dashes, a case-insensitive name and an optional =value.
+        const std::vector<std::string> originalArgs = args;
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            std::string_view arg = originalArgs[i];
+            // Scan option-looking tokens independently so an earlier value cannot hide a proxy option.
             size_t nameStart = arg.find_first_not_of('-');
             if (nameStart < 2 || nameStart == std::string::npos)
             {
@@ -1283,152 +1280,159 @@ namespace AppInstaller::Utility
 
             if (split == std::string_view::npos)
             {
-                isProxyValue = CaseInsensitiveEquals(name, s_proxyArgumentName) || CaseInsensitiveEquals(name, "word");
-                isCommandLineValue = redactCommandLine && CaseInsensitiveEquals(name, "commandline");
+                if (i + 1 < args.size())
+                {
+                    if (CaseInsensitiveEquals(name, "proxy"))
+                    {
+                        args[i + 1] = redactProxyValue(originalArgs[i + 1]);
+                    }
+                    else if (CaseInsensitiveEquals(name, "word"))
+                    {
+                        args[i + 1] = originalArgs[i + 1].find('@') == std::string::npos ?
+                            "[redacted]" : RedactProxyUri(originalArgs[i + 1]);
+                    }
+                    else if (redactCommandLine && CaseInsensitiveEquals(name, "commandline"))
+                    {
+                        args[i + 1] = RedactProxyCommandLine(originalArgs[i + 1], false);
+                    }
+                }
             }
-            else if (CaseInsensitiveEquals(name.substr(0, split), s_proxyArgumentName) || CaseInsensitiveEquals(name.substr(0, split), "word"))
+            else if (CaseInsensitiveEquals(name.substr(0, split), "proxy"))
             {
-                arg = arg.substr(0, nameStart + split + 1) + RedactProxyUri(name.substr(split + 1));
+                args[i] = std::string{ arg.substr(0, nameStart + split + 1) } + redactProxyValue(name.substr(split + 1));
+            }
+            else if (CaseInsensitiveEquals(name.substr(0, split), "word"))
+            {
+                std::string_view value = name.substr(split + 1);
+                args[i] = std::string{ arg.substr(0, nameStart + split + 1) } +
+                    (value.find('@') == std::string_view::npos ? "[redacted]" : RedactProxyUri(value));
             }
             else if (redactCommandLine && CaseInsensitiveEquals(name.substr(0, split), "commandline"))
             {
-                arg = arg.substr(0, nameStart + split + 1) + RedactProxyCommandLine(name.substr(split + 1), true);
+                args[i] = std::string{ arg.substr(0, nameStart + split + 1) } + RedactProxyCommandLine(name.substr(split + 1), true);
             }
         }
 
         for (size_t i = 0; i + 1 < args.size(); ++i)
         {
-            if ((!CaseInsensitiveEquals(args[i], "settings") && !CaseInsensitiveEquals(args[i], "config")) ||
-                !CaseInsensitiveEquals(args[i + 1], "set"))
+            if ((!CaseInsensitiveEquals(originalArgs[i], "settings") && !CaseInsensitiveEquals(originalArgs[i], "config")) ||
+                !CaseInsensitiveEquals(originalArgs[i + 1], "set"))
             {
                 continue;
             }
 
-            bool onlyPositionalArgumentsRemain = false;
-            bool previousArgumentNeedsValue = false;
-            std::string_view namedSettingName;
-            size_t namedSettingValueIndex = args.size();
-            size_t namedSettingValueOffset = 0;
-            size_t positionalSettingNameIndex = args.size();
-            size_t positionalSettingValueIndex = args.size();
-            size_t positionalCount = 0;
-
-            for (size_t j = i + 2; j < args.size(); ++j)
+            auto isDefaultProxySetting = [](std::string_view value)
             {
-                std::string_view current = args[j];
-                if (previousArgumentNeedsValue)
+                if (value.size() >= 2 &&
+                    ((value.front() == '"' && value.back() == '"') ||
+                     (value.front() == '\'' && value.back() == '\'')))
                 {
-                    previousArgumentNeedsValue = false;
-                    continue;
+                    value.remove_prefix(1);
+                    value.remove_suffix(1);
                 }
+                return CaseInsensitiveEquals(value, "DefaultProxy");
+            };
 
-                if (!onlyPositionalArgumentsRemain && current == "--")
+            bool containsNamedDefaultProxySetting = false;
+            std::vector<std::pair<size_t, size_t>> namedValueIndices;
+            std::vector<size_t> positionalSettingIndices;
+            for (size_t j = i + 2; j < originalArgs.size(); ++j)
+            {
+                std::string_view current = originalArgs[j];
+                size_t nameStart = current.find_first_not_of('-');
+                if (nameStart != std::string_view::npos && nameStart >= 2)
                 {
-                    onlyPositionalArgumentsRemain = true;
-                    continue;
-                }
-
-                if (!onlyPositionalArgumentsRemain && current.size() > 1 && current[0] == '-')
-                {
-                    size_t nameStart = current.find_first_not_of('-');
-                    if (nameStart == std::string_view::npos)
-                    {
-                        continue;
-                    }
-
                     current.remove_prefix(nameStart);
                     size_t split = current.find('=');
-                    bool hasAdjoinedValue = split != std::string_view::npos;
-                    std::string_view optionName = hasAdjoinedValue ? current.substr(0, split) : current;
+                    std::string_view optionName = split == std::string_view::npos ? current : current.substr(0, split);
 
                     if (CaseInsensitiveEquals(optionName, "setting"))
                     {
-                        if (hasAdjoinedValue)
+                        std::string_view settingName;
+                        if (split != std::string_view::npos)
                         {
-                            namedSettingName = current.substr(split + 1);
+                            settingName = current.substr(split + 1);
+                            if (isDefaultProxySetting(settingName))
+                            {
+                                positionalSettingIndices.push_back(j);
+                            }
                         }
-                        else if (j + 1 < args.size())
+                        else if (j + 1 < originalArgs.size())
                         {
-                            namedSettingName = args[++j];
+                            settingName = originalArgs[j + 1];
                         }
-                        continue;
+
+                        containsNamedDefaultProxySetting |= isDefaultProxySetting(settingName);
                     }
 
                     if (CaseInsensitiveEquals(optionName, "value"))
                     {
-                        if (hasAdjoinedValue)
-                        {
-                            namedSettingValueIndex = j;
-                            namedSettingValueOffset = nameStart + split + 1;
-                        }
-                        else if (j + 1 < args.size())
-                        {
-                            namedSettingValueIndex = ++j;
-                            namedSettingValueOffset = 0;
-                        }
-                        continue;
+                        namedValueIndices.emplace_back(
+                            split == std::string_view::npos ? j + 1 : j,
+                            split == std::string_view::npos ? 0 : nameStart + split + 1);
                     }
+                }
+                else if (isDefaultProxySetting(current))
+                {
+                    positionalSettingIndices.push_back(j);
+                }
+            }
 
-                    if (split != std::string_view::npos)
+            if (containsNamedDefaultProxySetting)
+            {
+                for (const auto& [valueIndex, valueOffset] : namedValueIndices)
+                {
+                    if (valueIndex < args.size())
+                    {
+                        args[valueIndex] = valueOffset == 0 ? redactProxyValue(originalArgs[valueIndex]) :
+                            originalArgs[valueIndex].substr(0, valueOffset) +
+                            redactProxyValue(std::string_view{ originalArgs[valueIndex] }.substr(valueOffset));
+                    }
+                }
+            }
+
+            for (size_t settingIndex : positionalSettingIndices)
+            {
+                for (size_t j = settingIndex + 1; j < originalArgs.size(); ++j)
+                {
+                    std::string_view current = originalArgs[j];
+                    if (current == "--")
                     {
                         continue;
                     }
 
-                    if (CaseInsensitiveEquals(optionName, "proxy") ||
-                        CaseInsensitiveEquals(optionName, "output-locale") ||
-                        CaseInsensitiveEquals(optionName, "correlation"))
+                    size_t nameStart = current.find_first_not_of('-');
+                    if (nameStart != std::string_view::npos && nameStart >= 2)
                     {
-                        previousArgumentNeedsValue = true;
+                        current.remove_prefix(nameStart);
+                        size_t split = current.find('=');
+                        std::string_view optionName = split == std::string_view::npos ? current : current.substr(0, split);
+                        if (CaseInsensitiveEquals(optionName, "value"))
+                        {
+                            size_t valueIndex = split == std::string_view::npos ? j + 1 : j;
+                            if (valueIndex < args.size())
+                            {
+                                size_t valueOffset = split == std::string_view::npos ? 0 : nameStart + split + 1;
+                                args[valueIndex] = valueOffset == 0 ? redactProxyValue(originalArgs[valueIndex]) :
+                                    originalArgs[valueIndex].substr(0, valueOffset) +
+                                    redactProxyValue(std::string_view{ originalArgs[valueIndex] }.substr(valueOffset));
+                            }
+                        }
+                        else if (split == std::string_view::npos &&
+                            (CaseInsensitiveEquals(optionName, "output-locale") ||
+                             CaseInsensitiveEquals(optionName, "correlation") ||
+                             CaseInsensitiveEquals(optionName, "proxy") ||
+                             CaseInsensitiveEquals(optionName, "setting")))
+                        {
+                            ++j;
+                        }
+                        continue;
                     }
 
-                    continue;
-                }
-
-                if (positionalCount == 0)
-                {
-                    positionalSettingNameIndex = j;
-                }
-                else if (positionalCount == 1)
-                {
-                    positionalSettingValueIndex = j;
-                }
-
-                ++positionalCount;
-            }
-
-            std::string_view settingName = namedSettingName;
-            if (settingName.empty() && positionalSettingNameIndex < args.size())
-            {
-                settingName = args[positionalSettingNameIndex];
-            }
-
-            if (settingName.size() >= 2 && settingName.front() == '"' && settingName.back() == '"')
-            {
-                settingName.remove_prefix(1);
-                settingName.remove_suffix(1);
-            }
-
-            size_t settingValueIndex = namedSettingValueIndex;
-            if (settingValueIndex >= args.size())
-            {
-                settingValueIndex = namedSettingName.empty() ?
-                    positionalSettingValueIndex : positionalSettingNameIndex;
-            }
-
-            if (CaseInsensitiveEquals(settingName, "DefaultProxy") && settingValueIndex < args.size())
-            {
-                if (namedSettingValueIndex < args.size() && namedSettingValueOffset > 0)
-                {
-                    args[settingValueIndex] = args[settingValueIndex].substr(0, namedSettingValueOffset) +
-                        RedactProxyUri(std::string_view{ args[settingValueIndex] }.substr(namedSettingValueOffset));
-                }
-                else
-                {
-                    args[settingValueIndex] = RedactProxyUri(args[settingValueIndex]);
+                    args[j] = redactProxyValue(current);
+                    break;
                 }
             }
-
-            break;
         }
 
         return args;

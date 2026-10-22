@@ -25,8 +25,11 @@ namespace AppInstaller::CLI
     CompletionData::CompletionData(std::string_view word, std::string_view commandLine, std::string_view position)
     {
         m_word = word;
+        bool hasProxyCompletionContext = Utility::CaseInsensitiveContainsSubstring(commandLine, "--proxy") ||
+            Utility::CaseInsensitiveContainsSubstring(commandLine, "DefaultProxy");
 
-        AICLI_LOG(CLI, Info, << "Completing word '" << Utility::RedactProxyUri(m_word) << '\'');
+        AICLI_LOG(CLI, Info, << "Completing word '" <<
+            (hasProxyCompletionContext ? "[redacted]" : Utility::RedactProxyUri(m_word)) << '\'');
 
         // Determine position as an integer
         size_t cursor = wil::safe_cast<size_t>(std::stoull(std::string{ position }));
@@ -192,7 +195,14 @@ namespace AppInstaller::CLI
         {
             logArguments.emplace_back(arg);
         }
-        logArguments = Utility::RedactProxyArguments(std::move(logArguments));
+        if (hasProxyCompletionContext)
+        {
+            std::fill(logArguments.begin(), logArguments.end(), "[redacted]");
+        }
+        else
+        {
+            logArguments = Utility::RedactProxyArguments(std::move(logArguments));
+        }
 
         AICLI_LOG(CLI, Info, << "Completion invoked for arguments:" << [&]() {
             std::stringstream strstr;

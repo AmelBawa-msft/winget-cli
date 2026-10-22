@@ -462,6 +462,23 @@ TEST_CASE("RedactProxyArguments_CompletionWord", "[strings]")
     REQUIRE(quotedCommandLine[0].find("secret") == std::string::npos);
 }
 
+TEST_CASE("RedactProxyArguments_ReviewRegressions", "[strings]")
+{
+    using Args = std::vector<std::string>;
+    const std::string proxyUri = std::string{ "http://u:p" } + '@' + "proxy";
+
+    REQUIRE(RedactProxyArguments(Args{ "install", "--override", "--proxy", "--proxy", proxyUri }) ==
+        Args{ "install", "--override", "--proxy", "[redacted]", "http://***@proxy" });
+    REQUIRE(RedactProxyArguments(Args{ "install", "--proxy", "http://u:p" }) ==
+        Args{ "install", "--proxy", "[redacted]" });
+    REQUIRE(RedactProxyArguments(Args{ "settings", "set", "--setting=DefaultProxy", "--value=" + proxyUri, "--setting=Other", "--value=second" }) ==
+        Args{ "settings", "set", "--setting=DefaultProxy", "--value=http://***@proxy", "--setting=Other", "--value=[redacted]" });
+    REQUIRE(RedactProxyArguments(Args{ "complete", "--commandline", "winget install --proxy '" + proxyUri + "'" }) ==
+        Args{ "complete", "--commandline", "[redacted]" });
+    REQUIRE(RedactProxyArguments(Args{ "complete", "--word", "http://u:p" }) ==
+        Args{ "complete", "--word", "[redacted]" });
+}
+
 TEST_CASE("IsValidWindowsFeaturePattern_AllFound_True", "[strings][111981]")
 {
     for (const auto& name : {
