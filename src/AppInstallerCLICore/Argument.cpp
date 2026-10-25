@@ -352,6 +352,22 @@ namespace AppInstaller::CLI
         return result;
     }
 
+    std::string ArgumentCommon::GetLogString(const Execution::Args& execArgs)
+    {
+        std::ostringstream result;
+        for (const auto& arg : GetFromExecArgs(execArgs))
+        {
+            result << " --" << arg.Name;
+            bool redact = arg.Type == Args::Type::Proxy || arg.Type == Args::Type::SettingValue ||
+                arg.Type == Args::Type::Word || arg.Type == Args::Type::CommandLine;
+            for (const auto& value : *execArgs.GetArgs(arg.Type))
+            {
+                result << " '" << (redact ? "[redacted]" : value) << '\'';
+            }
+        }
+        return result.str();
+    }
+
     Argument Argument::ForType(Execution::Args::Type type)
     {
         switch (type)

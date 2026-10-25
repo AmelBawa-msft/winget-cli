@@ -267,33 +267,6 @@ namespace AppInstaller::Logging
         AICLI_LOG(Core, Info, << "WinGet, version [" << version << "], activity [" << *GetActivityId() << ']');
         AICLI_LOG(Core, Info, << "Process: " << Filesystem::GetExecutablePathForProcess(GetCurrentProcess()).filename() << "[" << GetCurrentProcessId() << "], Level[" << executionLevel << "], Offset: " << &__ImageBase);
         AICLI_LOG(Core, Info, << "OS: " << Runtime::GetOSVersion());
-        AICLI_LOG(Core, Info, << "Command line Args: " << [&]() {
-                int argc = 0;
-                wil::unique_hlocal_ptr<LPWSTR> argv{ CommandLineToArgvW(GetCommandLineW(), &argc) };
-                if (!argv)
-                {
-                    return std::string{ "<unavailable>" };
-                }
-
-                std::vector<std::string> args;
-                for (int i = 0; i < argc; ++i)
-                {
-                    args.emplace_back(Utility::ConvertToUTF8(argv.get()[i]));
-                }
-
-                std::string result;
-                for (const auto& arg : Utility::RedactProxyArguments(std::move(args)))
-                {
-                    if (!result.empty())
-                    {
-                        result += ' ';
-                    }
-
-                    bool quote = arg.empty() || arg.find_first_of(" \t") != std::string::npos;
-                    result += quote ? '"' + arg + '"' : arg;
-                }
-                return result;
-            }());
         if (Runtime::IsRunningInPackagedContext())
         {
             AICLI_LOG(Core, Info, << "Package: " << packageVersion);

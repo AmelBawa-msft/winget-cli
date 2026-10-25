@@ -66,9 +66,9 @@ namespace AppInstaller::CLI
             AICLI_LOG(CLI, Info, << "Complete handing off to command " << command->FullName());
             command->Complete(subContext);
         }
-        catch (const CommandException& ce)
+        catch (const CommandException&)
         {
-            AICLI_LOG(CLI, Info, << "Error encountered during completion, ignoring: " << ce.Message());
+            AICLI_LOG(CLI, Info, << "Error encountered during completion, ignoring");
         }
         catch (const Settings::GroupPolicyException& e)
         {

@@ -182,7 +182,7 @@ namespace AppInstallerCLIE2ETests.Helpers
             p.StartInfo.RedirectStandardError = true;
             p.Start();
 
-            RunCommandResult result = new ();
+            RunCommandResult result = new () { ProcessId = p.Id };
             if (p.WaitForExit(timeOut))
             {
                 result.ExitCode = p.ExitCode;
@@ -1273,6 +1273,7 @@ namespace AppInstallerCLIE2ETests.Helpers
             }
 
             p.Start();
+            result.ProcessId = p.Id;
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
 
@@ -1338,6 +1339,9 @@ namespace AppInstallerCLIE2ETests.Helpers
         /// </summary>
         public struct RunCommandResult
         {
+            /// <summary>Process identifier.</summary>
+            public int ProcessId;
+
             /// <summary>
             /// Exit code.
             /// </summary>

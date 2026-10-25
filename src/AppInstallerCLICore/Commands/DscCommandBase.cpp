@@ -5,7 +5,6 @@
 #include "DscCommand.h"
 #include <winget/Runtime.h>
 #include <winget/StdErrLogger.h>
-#include <winget/AdminSettings.h>
 
 #define WINGET_DSC_FUNCTION_FOREACH(_macro_) \
     _macro_(Get); \
@@ -23,33 +22,6 @@ namespace AppInstaller::CLI
 {
     namespace
     {
-        // Hides the user info of any DefaultProxy value in the JSON before it is logged.
-        void RedactProxySettings(Json::Value& value)
-        {
-            if (value.isObject())
-            {
-                for (const auto& name : value.getMemberNames())
-                {
-                    Json::Value& member = value[name];
-                    if (member.isString() && Settings::StringToStringAdminSetting(name) == Settings::StringAdminSetting::DefaultProxy)
-                    {
-                        member = Utility::RedactProxyUri(member.asString());
-                    }
-                    else
-                    {
-                        RedactProxySettings(member);
-                    }
-                }
-            }
-            else if (value.isArray())
-            {
-                for (auto& element : value)
-                {
-                    RedactProxySettings(element);
-                }
-            }
-        }
-
         std::string GetFunctionManifestString(DscFunctions function)
         {
             THROW_HR_IF(E_INVALIDARG, !WI_IsSingleFlagSet(function));
@@ -314,13 +286,11 @@ namespace AppInstaller::CLI
             Json::String errors;
             if (Json::parseFromStream(builder, context.Reporter.RawInputStream(), &result, &errors))
             {
-                Json::Value logValue = result;
-                RedactProxySettings(logValue);
-                AICLI_LOG(CLI, Info, << "Json from input stream:\n" << Json::writeString(Json::StreamWriterBuilder{}, logValue));
+                AICLI_LOG(CLI, Info, << "Read JSON from input stream");
                 return result;
             }
 
-            AICLI_LOG(CLI, Error, << "Failed to read input JSON: " << errors);
+            AICLI_LOG(CLI, Error, << "Failed to read input JSON");
         }
 
         if (terminateContextOnError)

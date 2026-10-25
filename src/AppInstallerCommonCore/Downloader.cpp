@@ -143,7 +143,7 @@ namespace AppInstaller::Utility
         const auto& proxyUri = Network().GetProxyUri();
         if (proxyUri)
         {
-            AICLI_LOG(Core, Info, << "Using proxy " << Utility::RedactProxyUri(proxyUri.value()));
+            AICLI_LOG(Core, Info, << "Using configured proxy");
             session.reset(InternetOpen(
                 agentWide.c_str(),
                 INTERNET_OPEN_TYPE_PROXY,

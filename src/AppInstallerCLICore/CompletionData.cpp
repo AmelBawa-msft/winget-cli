@@ -5,7 +5,6 @@
 #include "Resources.h"
 #include <AppInstallerLogging.h>
 #include <AppInstallerErrors.h>
-#include <AppInstallerStrings.h>
 
 namespace AppInstaller::CLI
 {
@@ -25,11 +24,6 @@ namespace AppInstaller::CLI
     CompletionData::CompletionData(std::string_view word, std::string_view commandLine, std::string_view position)
     {
         m_word = word;
-        bool hasProxyCompletionContext = Utility::CaseInsensitiveContainsSubstring(commandLine, "--proxy") ||
-            Utility::CaseInsensitiveContainsSubstring(commandLine, "DefaultProxy");
-
-        AICLI_LOG(CLI, Info, << "Completing word '" <<
-            (hasProxyCompletionContext ? "[redacted]" : Utility::RedactProxyUri(m_word)) << '\'');
 
         // Determine position as an integer
         size_t cursor = wil::safe_cast<size_t>(std::stoull(std::string{ position }));
@@ -180,50 +174,8 @@ namespace AppInstaller::CLI
         m_argsBeforeWord = std::make_unique<CLI::Invocation>(std::move(argsBeforeWord));
         m_argsAfterWord = std::make_unique<CLI::Invocation>(std::move(argsAfterWord));
 
-        std::vector<std::string> logArguments;
-        for (const auto& arg : *m_argsBeforeWord)
-        {
-            logArguments.emplace_back(arg);
-        }
-        size_t beforeWordCount = logArguments.size();
-        if (!m_word.empty())
-        {
-            logArguments.emplace_back(m_word);
-        }
-        size_t afterWordStart = logArguments.size();
-        for (const auto& arg : *m_argsAfterWord)
-        {
-            logArguments.emplace_back(arg);
-        }
-        if (hasProxyCompletionContext)
-        {
-            std::fill(logArguments.begin(), logArguments.end(), "[redacted]");
-        }
-        else
-        {
-            logArguments = Utility::RedactProxyArguments(std::move(logArguments));
-        }
-
-        AICLI_LOG(CLI, Info, << "Completion invoked for arguments:" << [&]() {
-            std::stringstream strstr;
-            for (size_t i = 0; i < beforeWordCount; ++i)
-            {
-                strstr << " '" << logArguments[i] << '\'';
-            }
-            if (m_word.empty())
-            {
-                strstr << " << [insert] >> ";
-            }
-            else
-            {
-                strstr << " << [replace] '" << logArguments[beforeWordCount] << "' >> ";
-            }
-            for (size_t i = afterWordStart; i < logArguments.size(); ++i)
-            {
-                strstr << " '" << logArguments[i] << '\'';
-            }
-            return strstr.str();
-            }());
+        AICLI_LOG(CLI, Info, << "Completion arguments: " << m_argsBeforeWord->size() << " before word, " <<
+            m_argsAfterWord->size() << " after word; mode: " << (m_word.empty() ? "insert" : "replace"));
     }
 
     void CompletionData::ParseInto(std::string_view line, std::vector<std::string>& args, bool skipFirst)

@@ -130,19 +130,14 @@ namespace AppInstaller::CLI
                             else
                             {
                                 value = propertyNode.asString();
-                                std::string loggedValue = value.value();
-                                if (stringSetting == Settings::StringAdminSetting::DefaultProxy)
-                                {
-                                    loggedValue = Utility::RedactProxyUri(loggedValue);
-                                }
-                                AICLI_LOG(Config, Info, << "String admin setting: " << property << " => `" << loggedValue << "`");
+                                AICLI_LOG(Config, Info, << "String admin setting: " << property << " => [redacted]");
                             }
 
                             InputSettings.emplace_back(std::make_unique<AdminSettingsDetails::AdminSetting_String>(stringSetting, std::move(value)));
                             continue;
                         }
 
-                        AICLI_LOG(Config, Warning, << "Unknown admin setting: " << property);
+                        AICLI_LOG(Config, Warning, << "Unknown admin setting in input");
                     }
                 }
             }

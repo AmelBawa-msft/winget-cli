@@ -124,6 +124,9 @@ namespace AppInstaller::CLI
 
         static std::vector<ArgumentCommon> GetFromExecArgs(const Execution::Args& execArgs);
 
+        // Formats parsed arguments without sensitive values.
+        static std::string GetLogString(const Execution::Args& execArgs);
+
         Execution::Args::Type Type;
         Utility::LocIndView Name;
         char Alias;

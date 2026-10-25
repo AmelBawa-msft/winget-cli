@@ -6,6 +6,9 @@
 
 namespace AppInstallerCLIE2ETests
 {
+    using System;
+    using System.IO;
+    using System.Linq;
     using AppInstallerCLIE2ETests.Helpers;
     using NUnit.Framework;
 
@@ -129,6 +132,66 @@ namespace AppInstallerCLIE2ETests
 
             var invalid = TestCommon.RunAICLICommand(string.Empty, "--info --output-locale not-a-locale");
             Assert.That(invalid.ExitCode, Is.EqualTo(Constants.ErrorCode.ERROR_INVALID_CL_ARGUMENTS));
+        }
+
+        /// <summary>Verifies that rejected arguments do not expose proxy credentials in logs.</summary>
+        /// <param name="option">The proxy option syntax.</param>
+        /// <param name="includeHost">Whether the proxy value includes its host.</param>
+        [TestCase("--proxy:", true)]
+        [TestCase("--proxy:", false)]
+        [TestCase("--proxy=", true)]
+        [TestCase("--proxy=", false)]
+        public void ArgumentErrorsDoNotLogProxyCredentials(string option, bool includeHost)
+        {
+            const string user = "ProxyLogUser";
+            const string password = "ProxyLogPassword";
+            string proxy = $"http://{user}:{password}" + (includeHost ? "@127.0.0.1:9" : string.Empty);
+            var logsBefore = GetLogFiles();
+
+            var result = TestCommon.RunAICLICommand("search", $"{option}{proxy} --unknown-option --help");
+            Assert.That(result.ExitCode, Is.EqualTo(Constants.ErrorCode.ERROR_INVALID_CL_ARGUMENTS));
+
+            string log = GetLogForProcess(result.ProcessId, logsBefore);
+            Assert.That(log, Does.Contain("Error encountered parsing command line"));
+            Assert.That(log, Does.Not.Contain(user));
+            Assert.That(log, Does.Not.Contain(password));
+        }
+
+        /// <summary>Verifies that rejected completion input does not expose proxy credentials in logs.</summary>
+        [Test]
+        public void CompletionErrorsDoNotLogProxyCredentials()
+        {
+            const string user = "CompletionLogUser";
+            const string password = "CompletionLogPassword";
+            string commandLine = $"winget http://{user}:{password}@127.0.0.1:9 query";
+            var logsBefore = GetLogFiles();
+
+            var result = TestCommon.RunAICLICommand("complete", $"--word query --commandline \"{commandLine}\" --position {commandLine.Length}");
+            Assert.That(result.ExitCode, Is.EqualTo(Constants.ErrorCode.S_OK));
+
+            string log = GetLogForProcess(result.ProcessId, logsBefore);
+            Assert.That(log, Does.Contain("Error encountered during completion, ignoring"));
+            Assert.That(log, Does.Not.Contain(user));
+            Assert.That(log, Does.Not.Contain(password));
+        }
+
+        private static string[] GetLogFiles()
+        {
+            string logDirectory = TestSetup.Parameters.PackagedContext ?
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Constants.E2ETestLogsPathPackaged) :
+                Path.Combine(Path.GetTempPath(), Constants.E2ETestLogsPathUnpackaged);
+            return Directory.Exists(logDirectory) ? Directory.GetFiles(logDirectory, "WinGet-*.log") : Array.Empty<string>();
+        }
+
+        private static string GetLogForProcess(int processId, string[] logsBefore)
+        {
+            var logs = GetLogFiles()
+                .Except(logsBefore, StringComparer.OrdinalIgnoreCase)
+                .Select(File.ReadAllText)
+                .Where(log => log.Contains($"[{processId}]", StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(logs, Has.Length.EqualTo(1), "Expected one new WinGet log for the command process.");
+            return logs[0];
         }
     }
 }

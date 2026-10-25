@@ -822,13 +822,22 @@ namespace AppInstaller::MSStore
             }
         }
 
+        // SFS diagnostics may include proxy credentials in a different format.
+        std::string GetSfsMessageForLog(std::string_view message)
+        {
+            if (AppInstaller::Settings::Network().GetProxyUri())
+            {
+                return "[redacted]";
+            }
+            return std::string{ message };
+        }
+
         void SfsClientLoggingCallback(const SFS::LogData& logData)
         {
-            std::string message = "Message: " + std::string{ logData.message };
+            std::string message = "Message: " + GetSfsMessageForLog(logData.message);
             message += " File: " + std::string{ logData.file };
             message += " Line: " + std::to_string(logData.line);
             message += " Function: " + std::string{ logData.function };
-
             switch (logData.severity)
             {
             case SFS::LogSeverity::Verbose:
@@ -862,8 +871,9 @@ namespace AppInstaller::MSStore
                     auto result = SFS::SFSClient::Make(config, s_sfsClient);
                     if (!result)
                     {
-                        AICLI_LOG(Core, Error, << "Failed to initialize SfsClient. Error code: " << result.GetCode() << " Message: " << result.GetMsg());
-                        THROW_HR_MSG(APPINSTALLER_CLI_ERROR_SFSCLIENT_API_FAILED, "Failed to initialize SfsClient. ErrorCode: %lu Message: %hs", result.GetCode(), result.GetMsg().c_str());
+                        std::string message = GetSfsMessageForLog(result.GetMsg());
+                        AICLI_LOG(Core, Error, << "Failed to initialize SfsClient. Error code: " << result.GetCode() << " Message: " << message);
+                        THROW_HR_MSG(APPINSTALLER_CLI_ERROR_SFSCLIENT_API_FAILED, "Failed to initialize SfsClient. ErrorCode: %lu Message: %hs", result.GetCode(), message.c_str());
                     }
                 });
 
@@ -972,7 +982,7 @@ namespace AppInstaller::MSStore
                 const auto& proxyUri = AppInstaller::Settings::Network().GetProxyUri();
                 if (proxyUri)
                 {
-                    AICLI_LOG(Core, Info, << "Passing proxy to SFS client " << Utility::RedactProxyUri(*proxyUri));
+                    AICLI_LOG(Core, Info, << "Passing configured proxy to SFS client");
                     sfsClientRequest.proxy = *proxyUri;
                 }
 
@@ -986,8 +996,9 @@ namespace AppInstaller::MSStore
                     }
                     else
                     {
-                        AICLI_LOG(Core, Error, << "Failed to call SfsClient GetLatestAppDownloadInfo. Error code: " << requestResult.GetCode() << " Message: " << requestResult.GetMsg());
-                        THROW_HR_MSG(APPINSTALLER_CLI_ERROR_SFSCLIENT_API_FAILED, "Failed to call SfsClient GetLatestAppDownloadInfo. ErrorCode: %lu Message: %hs", requestResult.GetCode(), requestResult.GetMsg().c_str());
+                        std::string message = GetSfsMessageForLog(requestResult.GetMsg());
+                        AICLI_LOG(Core, Error, << "Failed to call SfsClient GetLatestAppDownloadInfo. Error code: " << requestResult.GetCode() << " Message: " << message);
+                        THROW_HR_MSG(APPINSTALLER_CLI_ERROR_SFSCLIENT_API_FAILED, "Failed to call SfsClient GetLatestAppDownloadInfo. ErrorCode: %lu Message: %hs", requestResult.GetCode(), message.c_str());
                     }
                 }
             }

@@ -58,8 +58,16 @@ namespace AppInstaller::Http
         const auto& proxyUri = Settings::Network().GetProxyUri();
         if (proxyUri)
         {
-            AICLI_LOG(Repo, Info, << "Setting proxy for REST HTTP Client helper to " << Utility::RedactProxyUri(proxyUri.value()));
-            m_clientConfig.set_proxy(web::web_proxy{ Utility::ConvertToUTF16(proxyUri.value()) });
+            AICLI_LOG(Repo, Info, << "Setting proxy for REST HTTP Client helper");
+            try
+            {
+                m_clientConfig.set_proxy(web::web_proxy{ Utility::ConvertToUTF16(proxyUri.value()) });
+            }
+            catch (const web::uri_exception&)
+            {
+                // The cpprest message contains the full URI.
+                throw web::uri_exception("provided proxy uri is invalid");
+            }
         }
         else
         {

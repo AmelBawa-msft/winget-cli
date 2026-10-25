@@ -169,15 +169,6 @@ namespace AppInstaller::CLI
             utf8Args.emplace_back(Utility::ConvertToUTF8(argv[i]));
         }
 
-        AICLI_LOG(CLI, Info, << "WinGet invoked with arguments:" << [&]() {
-                std::stringstream strstr;
-                for (const auto& arg : Utility::RedactProxyArguments(utf8Args))
-                {
-                    strstr << " '" << arg << '\'';
-                }
-                return strstr.str();
-            }());
-
         Invocation invocation{ std::move(utf8Args) };
 
         // The root command is our fallback in the event of very bad or very little input
@@ -209,7 +200,7 @@ namespace AppInstaller::CLI
         catch (const CommandException& ce)
         {
             command->OutputHelp(context.Reporter, &ce);
-            AICLI_LOG(CLI, Error, << "Error encountered parsing command line: " << ce.Message());
+            AICLI_LOG(CLI, Error, << "Error encountered parsing command line");
             return APPINSTALLER_CLI_ERROR_INVALID_CL_ARGUMENTS;
         }
         catch (const Settings::GroupPolicyException& e)
@@ -224,6 +215,8 @@ namespace AppInstaller::CLI
         {
             return Workflow::HandleException(context, std::current_exception());
         }
+
+        AICLI_LOG(CLI, Info, << "WinGet invoked with arguments:" << ArgumentCommon::GetLogString(context.Args));
 
         return Execute(context, command);
     }
